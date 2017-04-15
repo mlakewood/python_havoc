@@ -1,0 +1,86 @@
+version: '3'
+services:
+  vault_1:
+    build: ./docker_files/vault
+    volumes:
+      - ./config/vault:/vault/config
+      - ./logs:/vault/logs
+    ports:
+      - 1234:8200
+    cap_add:
+      - IPC_LOCK
+    depends_on:
+      - consul_agent_2
+  consul_agent_1:
+    build: ./docker_files/consul
+    container_name: "consul_agent_1"
+    hostname: "consul_agent_1"
+    volumes:
+      - ./config/consul-agent:/consul/config
+    depends_on:
+      - consul1
+      - consul2
+      - consul3
+      - consul4
+      - consul5
+  vault_2:
+    build: ./docker_files/vault
+    volumes:
+      - ./config/vault:/vault/config
+      - ./logs:/vault/logs
+    ports:
+      - 1235:8200
+    cap_add:
+      - IPC_LOCK
+    depends_on:
+      - consul_agent_2
+  consul_agent_2:
+    build: ./docker_files/consul
+    container_name: "consul_agent_2"
+    hostname: "consul_agent_2"
+    volumes:
+      - ./config/consul-agent:/consul/config
+    depends_on:
+      - consul1
+      - consul2
+      - consul3
+      - consul4
+      - consul5
+  consul1:
+    build: ./docker_files/consul
+    container_name: "consul1"
+    hostname: "consul1"
+    volumes:
+      - ./config/consul1:/consul/config
+  consul2:
+    build: ./docker_files/consul
+    container_name: "consul2"
+    hostname: "consul2"
+    volumes:
+      - ./config/consul2:/consul/config
+    depends_on:
+      - consul1
+  consul3:
+    build: ./docker_files/consul
+    container_name: "consul3"
+    hostname: "consul3"
+    volumes:
+      - ./config/consul3:/consul/config
+    depends_on:
+      - consul1
+  consul4:
+    build: ./docker_files/consul
+    container_name: "consul4"
+    hostname: "consul4"
+    volumes:
+      - ./config/consul4:/consul/config
+    depends_on:
+      - consul1
+  consul5:
+    build: ./docker_files/consul
+    container_name: "consul5"
+    hostname: "consul5"
+    volumes:
+      - ./config/consul5:/consul/config
+    depends_on:
+      - consul1
