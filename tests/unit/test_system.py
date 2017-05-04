@@ -228,16 +228,6 @@ class TestMockGenerateSystemState(BaseTest):
                                                'logs': None,
                                            }}
 
-        self.sys.require_single(self.consul_agent_1)
-        self.sys.require_single(self.consul_agent_2)
-
-        self.sys.require_group([self.vault_1, self.vault_2], 1)
-        self.sys.require_group([self.consul1,
-                               self.consul2,
-                               self.consul3,
-                               self.consul4,
-                               self.consul5], 1)
-
     @given(st.data())
     def test_next_state_link_fail(self, data):
         with patch.multiple(ContainerSystem,
