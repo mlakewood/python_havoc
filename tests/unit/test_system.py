@@ -9,7 +9,7 @@ import hvac
 import requests
 import warnings
 
-from python_havoc.system import ContainerSystem, NetworkFaultGen, SystemGen
+from tempest.system import ContainerSystem, NetworkFaultGen, SystemGen
 from tests.unit.base import BaseTest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -239,41 +239,6 @@ class TestMockGenerateSystemState(BaseTest):
                                self.consul5], 1)
 
     @given(st.data())
-    def test_next_state_node_fail(self, data):
-        with patch.multiple(ContainerSystem,
-                            stop_container=DEFAULT,
-                            start_container=DEFAULT,
-                            link_fix=DEFAULT,
-                            wait_for_converge=DEFAULT):
-            start = datetime.utcnow()
-            next_state = data.draw(SystemGen.generate_next_state(self.sys,
-                                                                 egress_fault=False,
-                                                                 link_fail=False,
-                                                                 node_fail=True
-                                                             ))
-            self.sys.change_system_state(next_state)
-
-            self.assertTrue(self.consul_agent_1 in next_state.keys())
-            self.assertTrue(self.consul_agent_2 in next_state.keys())
-
-            for group in self.sys.required['groups']:
-                count = 0
-                for cont in next_state.keys():
-                    if cont in group['containers']:
-                        count += 1
-
-                self.assertTrue(count >= group['minimum'])
-
-            for key, value in next_state.items():
-                self.assertEqual(value['status'], 'running')
-                self.assertTrue(value.get('ip', False))
-                link_default = {'egress': {'impaired': False},
-                                'ingress': {'impaired': False}}
-                self.assertEqual(value['links'], link_default)
-
-            self.sys.restore_system_state()
-
-    @given(st.data())
     def test_next_state_link_fail(self, data):
         with patch.multiple(ContainerSystem,
                             stop_container=DEFAULT,
@@ -283,8 +248,7 @@ class TestMockGenerateSystemState(BaseTest):
             start = datetime.utcnow()
             next_state = data.draw(SystemGen.generate_next_state(self.sys,
                                                                  egress_fault=False,
-                                                                 link_fail=True,
-                                                                 node_fail=False
+                                                                 link_fail=True
                                                              ))
             self.sys.change_system_state(next_state)
 
@@ -309,8 +273,7 @@ class TestMockGenerateSystemState(BaseTest):
             start = datetime.utcnow()
             next_state = data.draw(SystemGen.generate_next_state(self.sys,
                                                                  egress_fault=True,
-                                                                 link_fail=False,
-                                                                 node_fail=False
+                                                                 link_fail=False
                                                              ))
             self.sys.change_system_state(next_state)
 
@@ -325,30 +288,3 @@ class TestMockGenerateSystemState(BaseTest):
                 self.assertFalse(value['links']['ingress']['impaired'])
 
             self.sys.restore_system_state()
-
-    @given(st.data())
-    def test_required_containers(self, data):
-        full_container_list = deepcopy(self.sys.required['singletons'])
-        full_container_list.extend([li['containers'] for li in self.sys.required['groups']])
-
-        containers = data.draw(SystemGen.required_containers(self.sys))
-        for singleton in self.sys.required['singletons']:
-            self.assertTrue(singleton in containers)
-
-        # are we unique?
-        self.assertEqual(len(containers), len(set(containers)))
-        self.assertTrue(len(containers) >= 3)
-        exists = [True for c in containers if c in full_container_list]
-        self.assertTrue(all(exists))
-
-    def test_required_single_containers(self):
-        msg = "Container bad_name not defined in current system. Candidates are ['consul1', 'consul2', 'consul3', 'consul4', 'consul5', 'consul_agent_1', 'consul_agent_2', 'vault_vault_1_1', 'vault_vault_2_1']"
-        with self.assertRaises(ValueError) as ctx:
-            self.sys.require_single('bad_name')
-        self.assertEqual(str(ctx.exception), msg)
-
-    def test_required_group_containers(self):
-        msg = "Container bad_name not defined in current system. Candidates are ['consul1', 'consul2', 'consul3', 'consul4', 'consul5', 'consul_agent_1', 'consul_agent_2', 'vault_vault_1_1', 'vault_vault_2_1']"
-        with self.assertRaises(ValueError) as ctx:
-            self.sys.require_group(['bad_name'], 1)
-        self.assertEqual(str(ctx.exception), msg)

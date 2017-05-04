@@ -1,6 +1,6 @@
 import unittest
 
-from python_havoc.tc import Tc
+from tempest.tc import Tc
 
 class TestTc(unittest.TestCase):
 

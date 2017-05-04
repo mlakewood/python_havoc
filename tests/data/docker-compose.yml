@@ -3,10 +3,10 @@ services:
   vault_1:
     build: ./docker_files/vault
     volumes:
-      - ./config/vault:/vault/config
+      - ./config/vault_1:/vault/config
       - ./logs:/vault/logs
     ports:
-      - 1234:8200
+      - 1234:1234
     cap_add:
       - IPC_LOCK
     depends_on:
@@ -16,20 +16,18 @@ services:
     container_name: "consul_agent_1"
     hostname: "consul_agent_1"
     volumes:
-      - ./config/consul-agent:/consul/config
+      - ./config/consul-agent-1:/consul/config
     depends_on:
       - consul1
       - consul2
       - consul3
-      - consul4
-      - consul5
   vault_2:
     build: ./docker_files/vault
     volumes:
-      - ./config/vault:/vault/config
+      - ./config/vault_2:/vault/config
       - ./logs:/vault/logs
     ports:
-      - 1235:8200
+      - 1235:1235
     cap_add:
       - IPC_LOCK
     depends_on:
@@ -39,13 +37,11 @@ services:
     container_name: "consul_agent_2"
     hostname: "consul_agent_2"
     volumes:
-      - ./config/consul-agent:/consul/config
+      - ./config/consul-agent-2:/consul/config
     depends_on:
       - consul1
       - consul2
       - consul3
-      - consul4
-      - consul5
   consul1:
     build: ./docker_files/consul
     container_name: "consul1"
@@ -58,29 +54,29 @@ services:
     hostname: "consul2"
     volumes:
       - ./config/consul2:/consul/config
-    depends_on:
-      - consul1
+    # depends_on:
+    #   - consul1
   consul3:
     build: ./docker_files/consul
     container_name: "consul3"
     hostname: "consul3"
     volumes:
       - ./config/consul3:/consul/config
-    depends_on:
-      - consul1
-  consul4:
-    build: ./docker_files/consul
-    container_name: "consul4"
-    hostname: "consul4"
-    volumes:
-      - ./config/consul4:/consul/config
-    depends_on:
-      - consul1
-  consul5:
-    build: ./docker_files/consul
-    container_name: "consul5"
-    hostname: "consul5"
-    volumes:
-      - ./config/consul5:/consul/config
-    depends_on:
-      - consul1
+    # depends_on:
+    #   - consul1
+  # consul4:
+  #   build: ./docker_files/consul
+  #   container_name: "consul4"
+  #   hostname: "consul4"
+  #   volumes:
+  #     - ./config/consul4:/consul/config
+  #   depends_on:
+  #     - consul1
+  # consul5:
+  #   build: ./docker_files/consul
+  #   container_name: "consul5"
+  #   hostname: "consul5"
+  #   volumes:
+  #     - ./config/consul5:/consul/config
+  #   depends_on:
+  #     - consul1
