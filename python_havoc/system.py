@@ -25,7 +25,7 @@ class ContainerSystem():
 
 
     def start_system(self, debug=False):
-        command = "docker-compose --verbose -p {0} -f {1} up -d --build --force-recreate".format(
+        command = "docker-compose -p {0} -f {1} up -d --build --force-recreate".format(
             self.project_name, self.compose_file)
         if debug is True:
             print(command)

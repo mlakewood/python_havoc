@@ -223,7 +223,7 @@ class TestGenerateSystemState(unittest.TestCase):
         self.assertEqual(output, expected_output)
 
 
-    @settings(max_examples=5)
+    @settings(max_examples=2)
     @given(st.data())
     def test_next_state(self, data):
         import ipdb; ipdb.set_trace()

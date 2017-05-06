@@ -3,7 +3,7 @@ services:
   vault_1:
     build: ./docker_files/vault
     volumes:
-      - ./config/vault:/vault/config
+      - ./config/vault-1:/vault/config
       - ./logs:/vault/logs
     ports:
       - 1234:8200
@@ -26,7 +26,7 @@ services:
   vault_2:
     build: ./docker_files/vault
     volumes:
-      - ./config/vault:/vault/config
+      - ./config/vault-2:/vault/config
       - ./logs:/vault/logs
     ports:
       - 1235:8200
