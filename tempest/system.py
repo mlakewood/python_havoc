@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import datetime
 
 import docker
-from python_havoc.tc import Tc
+from tempest.tc import Tc
 from hypothesis import strategies as st
 from hypothesis import find, given, assume
 from requests.exceptions import RequestException
@@ -25,8 +25,13 @@ class ContainerSystem():
 
 
     def start_system(self, debug=False):
-        command = "docker-compose -p {0} -f {1} up -d --build --force-recreate".format(
-            self.project_name, self.compose_file)
+        verbose = ""
+        if debug is True:
+            verbose = " --verbose"
+        command = "docker-compose{0} -p {1} -f {2} up -d --build --force-recreate".format(
+            verbose,
+            self.project_name,
+            self.compose_file)
         if debug is True:
             print(command)
         output = run(command.split(" "), check=True)
@@ -100,45 +105,29 @@ class ContainerSystem():
             data[cont.name] = container
         return data
 
-    def require_single(self, container):
-        if container not in self.system.keys():
-            raise ValueError("Container {0} not defined in current system. Candidates are {1}".format(container,
-                                                                                                      sorted(self.system.keys())))
-        self.required['singletons'].append(container)
-
-    def require_group(self, containers, minimum):
-        group = {'minimum': minimum, 'containers': containers}
-        for container in containers:
-            if container not in self.system.keys():
-                raise ValueError("Container {0} not defined in current system. Candidates are {1}".format(container,
-                                                                                                          sorted(self.system.keys())))
-
-        self.required['groups'].append(group)
-
     def change_system_state(self, new_state):
-        # shut down any containers not in new state
-        all_containers = self.system.keys()
-        new_state_containers = new_state.keys()
-        stop_containers = [s_cont for s_cont in all_containers if s_cont not in new_state_containers]
-        for cont in stop_containers:
-            self.stop_container(cont)
+        for cont, state in new_state.items():
+            if self.ingress_impaired(state):
+                print("Making ingress impaired for container: {0}".format(cont))
+                self.fail_ingress(cont)
 
-        self.wait_for_converge()
+            if self.egress_impaired(state):
+                print("Making egress impaired for container: {0}".format(cont))
+                self.fault_egress(cont, state["links"]["egress"])
 
-        # for any container running update its links
+    def ingress_impaired(self, state):
+        return state["links"]["ingress"].get("impaired", True)
 
+    def egress_impaired(self, state):
+        return state["links"]["egress"].get("impaired", True)
 
     def wait_for_converge(self):
         sleep(1)
 
+
     def restore_system_state(self):
         for cont in self.system.keys():
-            self.start_container(cont)
-            # this as a sideeffect blocks starting the next container until the
-            # commands are done.
-            #self.link_fix(cont, cont)
-
-
+            self.fix_network(cont)
 
     # Util Methods
     @staticmethod
@@ -193,35 +182,34 @@ class ContainerSystem():
                                                                        filter_output.decode("utf-8"))
         return output
 
-    def link_fix(self, src, dest, recovery_time=5):
-        src_ip = self.fetch_ip(src)
+    def fix_network(self, container, recovery_time=1):
+        print("fixing network for container: {0}".format(container))
         output = []
 
-        command = "iptables -D INPUT -s {0} -j DROP".format(src_ip).split(" ")
-        rc = self._mutate_link(dest, command)
+        command = "iptables -D INPUT -j DROP".split(" ")
+        rc = self._mutate_link(container, command)
         output.append(rc)
 
         tc_clean = Tc().clean()
-        rc = self._mutate_link(src, tc_clean)
+        rc = self._mutate_link(container, tc_clean)
         output.append(rc)
         sleep(recovery_time)
         return output
 
-    def link_cut(self, src, dest):
+    def fail_ingress(self, container):
         """
             iptables
                ^
-        src -> |  dest
+        src -> |  container
 
-
+        drop all incoming traffic to the container.
 
         """
-        src_ip = self.fetch_ip(src)
 
-        command = 'iptables -A INPUT -s {0} -j DROP'.format(src_ip).split(" ")
-        return self._mutate_link(dest, command)
+        command = 'iptables -A INPUT -j DROP'.split(" ")
+        return self._mutate_link(container, command)
 
-    def link_flaky(self, src, dest, commands):
+    def fault_egress(self, src, commands, dest=None):
         """
         {
             "limit": "",
@@ -279,7 +267,11 @@ class ContainerSystem():
         #     tc = command_dispatch[key](**commands[key])
 
         output = ''
-        tc_command = self.build_tc_command(commands, self.fetch_ip(dest))
+        if dest != None:
+            filter_ip = self.fetch_ip(dest)
+        else:
+            filter_ip = None
+        tc_command = self.build_tc_command(commands, filter_ip)
         for command in tc_command.split(';'):
             split_command = [el for el in command.replace("\n", "").split(" ") if el != '']
             if split_command == []:
@@ -326,56 +318,37 @@ class SystemGen():
 
     @staticmethod
     @st.composite
-    def generate_next_state(draw, sys, egress_fault=True, link_fail=True, node_fail=True):
-        containers = draw(SystemGen.required_containers(sys, node_fail=node_fail))
+    def generate_next_state(draw, sys, egress_fault=True, ingress_fail=True):
 
         new_state = {}
 
         for cont in sys.system.keys():
+            new_state[cont] = deepcopy(sys.system[cont])
+            # remove logs if present as this isnt generatable.
+            del new_state[cont]['logs']
+            new_state[cont]['status'] = st.just(new_state[cont]['status'])
+            new_state[cont]['ip'] = st.just(new_state[cont]['ip'])
+            no_fault = st.just({"impaired": False})
 
-            if cont in containers:
-                new_state[cont] = deepcopy(sys.system[cont])
-                # remove logs if present as this isnt generatable.
-                del new_state[cont]['logs']
-                new_state[cont]['status'] = st.just(new_state[cont]['status'])
-                new_state[cont]['ip'] = st.just(new_state[cont]['ip'])
-                no_fault = st.just({"impaired": False})
+            if ingress_fail == True:
+                ingress = st.one_of(no_fault,
+                                    st.just({"impaired": True}))
+            else:
+                ingress = no_fault
 
-                if link_fail == True:
-                    ingress = st.one_of(no_fault,
-                                        st.just({"impaired": True}))
-                else:
-                    ingress = no_fault
+            if egress_fault == True:
+                egress = st.one_of(no_fault,
+                                   NetworkFaultGen.generate_network_fault())
+            else:
+                egress = no_fault
 
-                if egress_fault == True:
-                    egress = st.one_of(no_fault,
-                                       NetworkFaultGen.generate_network_fault())
-                else:
-                    egress = no_fault
+            links = st.fixed_dictionaries({"ingress": ingress,
+                                           "egress": egress})
 
-                links = st.fixed_dictionaries({"ingress": ingress,
-                                               "egress": egress})
-
-                new_state[cont]['links'] = links
-                new_state[cont] = st.fixed_dictionaries(new_state[cont])
+            new_state[cont]['links'] = links
+            new_state[cont] = st.fixed_dictionaries(new_state[cont])
 
         return draw(st.fixed_dictionaries(new_state))
-
-    @st.composite
-    def required_containers(draw, system, node_fail=True):
-        containers = []
-        containers.extend(system.required['singletons'])
-
-        for group in system.required['groups']:
-            if node_fail == True:
-                min_size = group['minimum']
-            else:
-                min_size = len(group['containers'])
-            containers.extend(draw(st.lists(elements=st.sampled_from(group['containers']),
-                                                                     min_size=min_size,
-                                                                     unique=True)))
-        return containers
-
 
 
 class NetworkFaultGen():
@@ -394,7 +367,6 @@ class NetworkFaultGen():
         fault = draw(draw(NetworkFaultGen.generate_network_fault_only()))
         no_fault = st.just(no_fault)
 
-        # import ipdb; ipdb.set_trace()
         if all([value is None for key, value in fault.items()]):
             return draw(draw(st.just(no_fault)))
 

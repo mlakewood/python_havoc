@@ -39,14 +39,15 @@ tc class add dev eth0 parent 1: classid 1:1 htb rate 1000mbit;
 
 
     def filter(self, ip):
-        qdisc_1_parent = self._inc_minor(self.root)
-        qdisc_handle = self._inc_major(qdisc_1_parent)
-        self.handle = qdisc_handle
-        class_id = self._inc_minor(self.class_id)
-        self.class_id = class_id
-        self.handle = self.class_id
+        if ip is not None:
+            qdisc_1_parent = self._inc_minor(self.root)
+            qdisc_handle = self._inc_major(qdisc_1_parent)
+            self.handle = qdisc_handle
+            class_id = self._inc_minor(self.class_id)
+            self.class_id = class_id
+            self.handle = self.class_id
 
-        self.filter_command = """tc qdisc add dev eth0 parent {parent} handle {handle} pfifo limit 5000;
+            self.filter_command = """tc qdisc add dev eth0 parent {parent} handle {handle} pfifo limit 5000;
 tc class add dev eth0 parent {root} classid {class_id} htb rate 1000mbit;
 tc filter add dev eth0 parent {root} protocol ip prio 2 u32 flowid {class_id} match ip dst {ip};
 """.format(root=self.root,
@@ -54,7 +55,9 @@ tc filter add dev eth0 parent {root} protocol ip prio 2 u32 flowid {class_id} ma
            handle=qdisc_handle,
            class_id=class_id,
            ip=ip)
-        self.filter_applied = True
+            self.filter_applied = True
+        else:
+            self.filter_applied = False
         return self
 
     def _inc_major(self, handle):

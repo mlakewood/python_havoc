@@ -1,0 +1,7 @@
+{
+    "log_level": "INFO",
+    "node_name": "consul_agent_1",
+    "retry_join": ["consul1", "consul2", "consul3"],
+    "node_id": "21176aa5-7c58-4fe4-a451-fcb1ff10bd40",
+    "bind_addr": "0.0.0.0"
+}

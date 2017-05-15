@@ -1,0 +1,9 @@
+{
+    "log_level": "INFO",
+    "node_name": "consul3",
+    "server": true,
+    "disable_update_check": true,
+    "retry_join": ["consul1", "consul2", "consul3"],
+    "bind_addr": "0.0.0.0",
+    "node_id": "31176aa5-7c58-4fe4-a451-fcb1ff10bd4d"
+}

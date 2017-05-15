@@ -1,16 +1,19 @@
 import os
 import unittest
+import random
+import string
 from unittest.mock import MagicMock, patch, DEFAULT
 from time import sleep
 from copy import deepcopy
 from datetime import datetime, timedelta
+from pprint import pprint, pformat
 
 import hvac
 import requests
 import warnings
 from requests.exceptions import RequestException
 
-from python_havoc.system import ContainerSystem, NetworkFaultGen, SystemGen
+from tempest.system import ContainerSystem, NetworkFaultGen, SystemGen
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from tests.vault_client import VaultClient
@@ -142,8 +145,8 @@ class TestGenerateSystemState(unittest.TestCase):
     consul1 = 'consul1'
     consul2 = 'consul2'
     consul3 = 'consul3'
-    consul4 = 'consul4'
-    consul5 = 'consul5'
+    # consul4 = 'consul4'
+    # consul5 = 'consul5'
 
     @classmethod
     def setUpClass(cls):
@@ -153,72 +156,57 @@ class TestGenerateSystemState(unittest.TestCase):
         cls.sys._populate_system()
         cls.sys.start_system()
 
-        cls.sys.require_single(cls.consul_agent_1)
-        cls.sys.require_single(cls.consul_agent_2)
-
-        cls.sys.require_group([cls.vault_1, cls.vault_2], 1)
-        cls.sys.require_group([cls.consul1,
-                                cls.consul2,
-                                cls.consul3,
-                                cls.consul4,
-                                cls.consul5], 1)
         cls.init_result = None
         cls.sys.wait_for_converge()
         cls.counter = 0
         cls.vault = VaultClient(['1234', '1235'])
+
+        sleep(5)
+        cls.init_and_unseal()
 
 
     @classmethod
     def tearDownClass(cls):
         cls.sys.stop_system()
 
+    def setUp(self):
+        self.path = "secret/{0}".format(self.random_path())
 
-
-    def init_and_unseal(self):
+    @classmethod
+    def init_and_unseal(cls):
         try:
-            self.vault.init_vault()
-            self.vault.wait_for_vault()
+            cls.vault.init_vault()
 
-            # self.init_result = init_vault(self.init_result)
-            # #make standby
-            # self.init_result = init_vault(self.init_result, port='1235')
-            # self.vault_token = self.init_result['root_token']
         except Exception as e:
-            print(self.sys.print_container_logs(self.vault_1))
-            print(self.sys.print_container_logs(self.vault_2))
+            print(cls.sys.print_container_logs(cls.vault_1))
+            print(cls.sys.print_container_logs(cls.vault_2))
             raise ValueError("Encountered exception '{0}' when initializing vault server".format(e))
 
+    def random_path(self, length=5):
+        return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(length))
 
-    def write_value_and_validate(self, key, value, ports=['1234', '1235']):
-        self.vault.write_to_vault(key, value)
-        # vault_port = ports[0]
-        # client = None
-        # try:
-        #     client = hvac.Client(url='http://localhost:{0}'.format(vault_port),
-        #                          token=self.vault_token,
-        #                          timeout=5)
-        #     assert(client.is_sealed() is False)
-        # except Exception as e:
-        #     print(e)
-        #     vault_port = ports[1]
-        #     client = hvac.Client(url='http://localhost:{0}'.format(vault_port),
-        #                          token=self.vault_token,
-        #                          timeout=2)
-        #     assert(client.is_sealed() is False)
+    def write_and_validate(self, path, value):
+        counter = 0
+        data = {"0": value}
+        while counter < 10:
+            counter += 1
+            data[str(counter)] = value
+            self.vault.write_to_vault(path, data)
 
-        # key = str(self.counter)
-        # client.write(key, baz=value, lease='1h')
-        self.counter += 1
-        output = self.vault.read(key)
+        output = self.vault.read(path)
         del output['request_id']
 
         expected_output = {'auth': None,
-                           'data': {'baz': 'bar', 'lease': '1h'},
+                           'data': {'lease': '1h'},
                            'lease_duration': 3600,
                            'lease_id': '',
                            'renewable': False,
                            'warnings': None,
                            'wrap_info': None}
+        expected_output['data']['data'] = data
+
+        print(output)
+        print(expected_output)
 
         self.assertEqual(output, expected_output)
 
@@ -226,28 +214,25 @@ class TestGenerateSystemState(unittest.TestCase):
     @settings(max_examples=2)
     @given(st.data())
     def test_next_state(self, data):
-        import ipdb; ipdb.set_trace()
         self.sys.restore_system_state()
-        self.init_and_unseal()
+        import ipdb; ipdb.set_trace()
+        print("Setting the system back to known good state...")
+        self.write_and_validate("{0}-clean".format(self.path), "bar")
+        print("Verified new state works")
 
-        generator = SystemGen.generate_next_state(self.sys,
-                                                  egress_fault=False,
-                                                  link_fail=False,
-                                                  node_fail=True)
 
 
         next_state = data.draw(SystemGen.generate_next_state(self.sys,
-                                                             egress_fault=False,
-                                                             link_fail=False,
-                                                             node_fail=True
+                                                             egress_fault=True,
+                                                             ingress_fail=True
                                                          ))
 
-        print("move to new state: {0}".format([(key, value["status"]) for key, value in next_state.items()]))
+        print("Next State: {0}".format(pformat(next_state)))
 
+        print("Inducing Failures")
         self.sys.change_system_state(next_state)
-
-
-        self.write_value_and_validate("secret/foo", "bar")
+        self.write_and_validate("{0}-dirty".format(self.path), "bar")
+        print("Have successfully written in the face of failures")
 
 
 
