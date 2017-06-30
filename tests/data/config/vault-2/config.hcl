@@ -1,10 +1,11 @@
 storage "consul" {
-  address = "consul_agent_1:8500"
-  redirect_addr = "http://127.0.0.1:1235"
+  address = "consul_agent_2:8500"
+  cluster_addr = "https://vault_vault_2_1:8200"
   path = "vault"
 }
 
 listener "tcp" {
-  address     = "0.0.0.0:1235"
-  tls_disable = 1
+  address     = "vault_vault_2_1:8200"
+  tls_cert_file =  "/vault/tls/vault.crt"
+  tls_key_file = "/vault/tls/vault.key"
 }

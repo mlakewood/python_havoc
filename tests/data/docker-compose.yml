@@ -4,11 +4,15 @@ services:
     build: ./docker_files/vault
     volumes:
       - ./config/vault-1:/vault/config
+      - ./docker_files/vault/tls:/vault/tls
       - ./logs:/vault/logs
     ports:
-      - 1234:1234
+      - 1234:8200
     cap_add:
       - IPC_LOCK
+    networks:
+      vault_net:
+        ipv4_address: 10.0.0.30
     depends_on:
       - consul_agent_2
   consul_agent_1:
@@ -17,6 +21,8 @@ services:
     hostname: "consul_agent_1"
     ports:
       - 8501:8500
+    networks:
+      - vault_net
     volumes:
       - ./config/consul-agent-1:/consul/config
     depends_on:
@@ -28,11 +34,15 @@ services:
     build: ./docker_files/vault
     volumes:
       - ./config/vault-2:/vault/config
+      - ./docker_files/vault/tls:/vault/tls
       - ./logs:/vault/logs
     ports:
-      - 1235:1235
+      - 1235:8200
     cap_add:
       - IPC_LOCK
+    networks:
+      vault_net:
+        ipv4_address: 10.0.0.31
     depends_on:
       - consul_agent_2
   consul_agent_2:
@@ -41,6 +51,8 @@ services:
     hostname: "consul_agent_2"
     ports:
       - 8502:8500
+    networks:
+      - vault_net
     volumes:
       - ./config/consul-agent-2:/consul/config
     depends_on:
@@ -54,6 +66,8 @@ services:
     hostname: "consul1"
     ports:
       - 8503:8500
+    networks:
+      - vault_net
     volumes:
       - ./config/consul1:/consul/config
 #    command: --client 0.0.0.0
@@ -63,12 +77,16 @@ services:
     hostname: "consul2"
     volumes:
       - ./config/consul2:/consul/config
+    networks:
+      - vault_net
     # depends_on:
     #   - consul1
   consul3:
     build: ./docker_files/consul
     container_name: "consul3"
     hostname: "consul3"
+    networks:
+      - vault_net
     volumes:
       - ./config/consul3:/consul/config
     # depends_on:
@@ -89,3 +107,11 @@ services:
   #     - ./config/consul5:/consul/config
   #   depends_on:
   #     - consul1
+
+networks:
+  vault_net:
+    ipam:
+      driver: default
+      config:
+      -
+        subnet: 10.0.0.1/24
